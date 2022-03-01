@@ -1,0 +1,7 @@
+.vscode
+*.xls
+*.xlsx
+*.csv
+*.numbers
+out
+dist
