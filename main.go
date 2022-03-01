@@ -5,31 +5,49 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
 
 type VLAN struct {
-	ID, Name string
+	ID, Name, Slug string
 }
 
-func isVLANDefinition(row []string, column int, cell string) bool {
-	return strings.EqualFold("vlan", cell) && strings.EqualFold("description", row[column+2])
+func slugify(s string) string {
+	whiteSpace := regexp.MustCompile(`\W+`)
+	slug := whiteSpace.ReplaceAllString(s, "-")
+	return strings.ToLower(slug)
+}
+
+func NewVLAN(id, name string) VLAN {
+	return VLAN{
+		ID:   id,
+		Name: name,
+		Slug: slugify(name),
+	}
+}
+
+func vlanDefinitionFound(row []string, column int, cell string) bool {
+	vlanCellFound := strings.EqualFold("vlan", strings.TrimSpace(cell))
+	descCellFound := strings.EqualFold("description", strings.TrimSpace(row[column+2]))
+	vlanValueFound := strings.TrimSpace(row[column+1]) != ""
+	descValueFound := strings.TrimSpace(row[column+3]) != ""
+
+	return vlanCellFound && vlanValueFound && descCellFound && descValueFound
+
 }
 
 func scanRow(row []string) ([]VLAN, error) {
 	var vlans []VLAN
 	for i, cell := range row {
-		if len(row) < i+3 {
+		if len(row) <= i+3 {
 			continue
 		}
-		if isVLANDefinition(row, i, cell) {
+		if vlanDefinitionFound(row, i, cell) {
 			id, desc := row[i+1], row[i+3]
-			vlan := VLAN{
-				ID:   id,
-				Name: desc,
-			}
+			vlan := NewVLAN(id, desc)
 			vlans = append(vlans, vlan)
 		}
 	}
@@ -71,13 +89,13 @@ func (v VLANSet) WriteCSV(path string) error {
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
-	if err := writer.Write([]string{"id", "name"}); err != nil {
+	if err := writer.Write([]string{"id", "name", "slug"}); err != nil {
 		return err
 	}
 	defer writer.Flush()
 
 	for _, vlan := range v {
-		if err := writer.Write([]string{vlan.ID, vlan.Name}); err != nil {
+		if err := writer.Write([]string{vlan.ID, vlan.Name, vlan.Slug}); err != nil {
 			return err
 		}
 	}
@@ -85,10 +103,10 @@ func (v VLANSet) WriteCSV(path string) error {
 }
 
 func (v VLANSet) PrintTable() {
-	fmt.Printf("|%30s|%30s|\n", "VLAN", "Description")
-	fmt.Printf("|%s|\n", strings.Repeat("-", 61))
+	fmt.Printf("|%30s|%30s|%30s|\n", "VLAN", "Name", "Slug")
+	fmt.Printf("|%s|\n", strings.Repeat("-", 92))
 	for _, vlan := range v {
-		fmt.Printf("|%30s|%30s|\n", vlan.ID, vlan.Name)
+		fmt.Printf("|%30s|%30s|%30s|\n", vlan.ID, vlan.Name, vlan.Slug)
 	}
 }
 
